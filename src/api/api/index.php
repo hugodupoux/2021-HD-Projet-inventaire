@@ -12,6 +12,7 @@ require 'conn.inc.php';
 
 //chargement des fonctions du model
 require 'api.model.php';
+require 'db.model.php';
 require 'security.model.php';
 
 require_once 'router.php';
@@ -57,28 +58,12 @@ route('post', $sub_dir . '/scan', function ($matches, $rxd) {
     $affectedLines = -2;
 
     if (isset($data['aho_id'])) {
-        $affectedLines = setObjectFound($data['aho_id']);
+        $affectedLines = objectScanned($data['aho_id']);
     }
 
-    //file_put_contents("data_.json", $received_json);
-
-    $responseCode = 0;
-
-    switch ($affectedLines) { 
-        case -2: $responseCode = 400;
-        break;
-        case -1: $responseCode = 404;
-        break;
-        case 0: $data['etat']= 'deja scanne';
-            $received_json = json_encode($data);
-        case -1: $responseCode = 200;
-        break;
-    }
-
-    http_response_code($responseCode);
+    http_response_code(getCodeHTTP($affectedLines));
 
     header('Content-Type: application/json');
-    //echo $received_json;
     echo $affectedLines;
     exit();
 });
@@ -146,7 +131,11 @@ route('get', $sub_dir . '/objects/([A-Z-0-9]+)', function ($matches, $rxd) {
 route('get', $sub_dir . '/objects', function ($matches, $rxd) {
     $data = getAllObjects(false);
 
-    http_response_code(200);
+    if ($data == null) {
+        http_response_code(404);
+    } else {
+        http_response_code(200);
+    }
     header('Content-Type: application/json');
     echo json_encode($data);
     exit();
@@ -156,10 +145,14 @@ route('get', $sub_dir . '/objects', function ($matches, $rxd) {
 /**
  * Retourne la liste de tous les objets archivés 
  */
-route('get', $sub_dir . '/objects/archived', function ($matches, $rxd) {
+route('get', $sub_dir . '/objects/archive', function ($matches, $rxd) {
     $data = getAllObjects(true);
 
-    http_response_code(200);
+    if ($data == null) {
+        http_response_code(404);
+    } else {
+        http_response_code(200);
+    }
     header('Content-Type: application/json');
     echo json_encode($data);
     exit();
@@ -170,15 +163,14 @@ route('get', $sub_dir . '/objects/archived', function ($matches, $rxd) {
  * Permet d'insérer un objet
  * Retourne -1 si le json est invalide, nombre positif : nombre de lignes affectés (0 ou 1)
  */
-route('put', $sub_dir . '/objects', function ($matches, $rxd) {
+route('post', $sub_dir . '/objects', function ($matches, $rxd) {
 
     // Takes raw data from the request
     $received_json = (file_get_contents('php://input'));
 
     $data = json_decode($received_json, true);
 
-    //$affectedLines = insertFromJSON($received_json);
-    $affectedLines = 1;
+    $affectedLines = insertFromJSON($received_json);
     
     if ($affectedLines === -2) {
         http_response_code(400);
@@ -205,12 +197,8 @@ route('put', $sub_dir . '/objects', function ($matches, $rxd) {
     $data = json_decode($received_json, true);
 
     $affectedLines = updateFromJSON($received_json);
-    
-    if ($affectedLines === -2) {
-        http_response_code(400);
-    } else {
-        http_response_code(200);
-    }
+
+    http_response_code(getCodeHTTP($affectedLines));
 
     header('Content-Type: application/json');
     //echo $received_json;
@@ -232,14 +220,9 @@ route('put', $sub_dir . '/objects/archive', function ($matches, $rxd) {
 
     $affectedLines = archiveFromJSON($received_json);
     
-    if ($affectedLines === -2) {
-        http_response_code(400);
-    } else {
-        http_response_code(200);
-    }
+    http_response_code(getCodeHTTP($affectedLines));
 
     header('Content-Type: application/json');
-    //echo $received_json;
     echo $affectedLines;
     exit();
 });
@@ -254,7 +237,11 @@ route('put', $sub_dir . '/objects/archive', function ($matches, $rxd) {
 route('get', $sub_dir . '/removal-reason', function ($matches, $rxd) {
     $data = getRemovalReason();
 
-    http_response_code(200);
+    if ($data == null) {
+        http_response_code(404);
+    } else {
+        http_response_code(200);
+    }
     header('Content-Type: application/json');
     echo json_encode($data);
     exit();
