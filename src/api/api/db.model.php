@@ -4,7 +4,7 @@
  * @folder : IoT/Site
  * @filename : db.model.php
  * @creation : 09/06/2021
- * @last_modification : 09/06/2021
+ * @last_modification : 21/06/2021
  */
 
 
@@ -268,7 +268,7 @@ function getNumberOfObjects() {
         $stmt->execute();
 
         // Récupère la première ligne de données
-        return $stmt->fetchAll();
+        return ($stmt->fetchAll())[0]['COUNT(*)'];
     }
 
     catch(PDOException $e){
@@ -299,7 +299,7 @@ function getNumbersOfFoundedObjects() {
         $stmt->execute();
 
         // Récupère la première ligne de données
-        return $stmt->fetchAll();
+        return ($stmt->fetchAll())[0]['COUNT(*)'];
     }
 
     catch(PDOException $e){

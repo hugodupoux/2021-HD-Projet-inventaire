@@ -4,7 +4,7 @@
  * @folder : IoT/Site
  * @filename : api.model.php
  * @creation : 08/06/2021
- * @last_modification : 09/06/2021
+ * @last_modification : 21/06/2021
  */
 
 
@@ -42,9 +42,24 @@ function objectScanned($aho_id) {
 
 
 /**
- * Retourne un json     
+ * Retourne un tableau des statistiques de l'inventaire en cours 
  */
 function getInventoryStats() {
+    // Si l'inventaire est fini, retourner un tableau vide
+    if (checkInventoryFinished()) 
+        return array();
+
+    $numberOfObject = getNumberOfObjects();
+    $numberOfFoundedObject = getNumbersOfFoundedObjects();
+    if ($numberOfFoundedObject == 0)
+        $percentOfObjectFounded = 0;
+    else 
+        $numberOfNotFoundedObject = $numberOfObject - $numberOfFoundedObject;
+
+    // Retourne le tableau 
+    return array ("numberOfObject" => $numberOfObject,
+                  "numberOfFoundedObject" => $numberOfFoundedObject,
+                  "numberOfNotFoundedObject" => $numberOfNotFoundedObject);
 
 }
 
@@ -271,8 +286,8 @@ function archiveFromJSON ($json) {
  */
 function checkInventoryFinished() {
     
-    $objectsNumbers = getNumberOfObjects()[0]['COUNT(*)'];
-    $foundedObjectsNumber = getNumbersOfFoundedObjects()[0]['COUNT(*)'];
+    $objectsNumbers = getNumberOfObjects();
+    $foundedObjectsNumber = getNumbersOfFoundedObjects();
 
     if ($objectsNumbers === $foundedObjectsNumber)
         return true;
@@ -330,3 +345,32 @@ function getCodeHTTP($state) {
 }
 
 
+/**
+ * 
+ */
+function HTTPCodeGet ($array) {
+    if (empty($array)) 
+        return 404;
+    else
+        return 200;
+}
+
+
+/**
+ * 
+ */
+function HTTPCodePost ($state) {
+    $responseCode = 0;
+
+    switch ($state) { 
+        case INVALID_JSON: $responseCode = 400;
+        break;
+        case OBJECT_DOESNT_EXIST: $responseCode = 404;
+        break;
+        case 0:
+        case SUCCESS: $responseCode = 200;
+        break;
+    }
+
+    return $responseCode;
+}

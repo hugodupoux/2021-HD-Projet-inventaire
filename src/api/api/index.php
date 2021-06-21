@@ -3,7 +3,7 @@
  * @Author: Hugo Dupoux
  * @filename : api/index.php
  * @creation : 08/06/2021
- * @last_modification : 09/06/2021
+ * @last_modification : 21/06/2021
  */
 
 //chargement de la configuration
@@ -25,25 +25,23 @@ $sub_dir = dirname($_SERVER['PHP_SELF']);
 
 /**
  * Permet de démarrer un inventaire si tous les objets sont trouvés
- * Retourne -1 si tous les objets ne sont pas trouvés, ou 1 si l'opérationa réussie 
+ * Ne retourne rien 
  */
 route('post', $sub_dir . '/inventory', function ($matches, $rxd) {
 
-    $affectedLines = startInventory();
-    
-    if ($affectedLines === -1) {
-        http_response_code(400);
-    } else {
-        http_response_code(200);
-    }
+    $state = startInventory();
 
-    header('Content-Type: application/json');
-    //echo $received_json;
-    echo $affectedLines;
+    if ($state == SUCCESS) 
+        $responseCode = 201;
+    else
+        $responseCode = 409;
+
+    http_response_code($responseCode);
     exit();
 });
 
 
+/************************** A SUPPRIEMR  */
 /**
  * Permet de paramétrer un objet comme trouvé
  * Retourne -2 si le json est invalide, -1 si l'objet est inexistant, 0 si l'objet est déjà trouvé, 1 si l'opération a réussie
@@ -68,17 +66,15 @@ route('post', $sub_dir . '/scan', function ($matches, $rxd) {
     exit();
 });
 
-// -------------------------------------- EN COURS
 
 /**
  * Retourne les statistiques de l'inventaire  
  */
-route('get', $sub_dir . '/inventory/([A-Z-0-9]+)/stats', function ($matches, $rxd) {
-    $inv_id = $matches[1][0];
+route('get', $sub_dir . '/inventory', function ($matches, $rxd) {
+    $data = getInventoryStats();
 
-    $data = getInventoryStats(inv_id);
+    http_response_code(HTTPCodeGet($data));
 
-    http_response_code(200);
     header('Content-Type: application/json');
     echo json_encode($data);
     exit();
@@ -95,9 +91,8 @@ route('get', $sub_dir . '/inventory/([A-Z-0-9]+)/pdf', function ($matches, $rxd)
 
     // retourner pdf 
 
+
     http_response_code(200);
-    header('Content-Type: application/json');
-    echo json_encode($data);
     exit();
 });
 
@@ -113,11 +108,7 @@ route('get', $sub_dir . '/objects/([A-Z-0-9]+)', function ($matches, $rxd) {
   
     $data = getObject($aho_id);
 
-    if ($data == null) {
-        http_response_code(404);
-    } else {
-        http_response_code(200);
-    }
+    http_response_code(HTTPCodeGet($data));
 
     header('Content-Type: application/json');
     echo json_encode($data);
@@ -126,18 +117,26 @@ route('get', $sub_dir . '/objects/([A-Z-0-9]+)', function ($matches, $rxd) {
 
 
 /**
- * Retourne la liste de tous les objets 
+ * Retourne la liste de tous les objets, prend un paramètre "archived" en header qui accepte uniquement "true" ou "false"
  */
 route('get', $sub_dir . '/objects', function ($matches, $rxd) {
-    $data = getAllObjects(false);
+    $headers = getallheaders();
 
-    if ($data == null) {
-        http_response_code(404);
-    } else {
-        http_response_code(200);
-    }
-    header('Content-Type: application/json');
-    echo json_encode($data);
+    if (isset($headers["archived"])) {
+        if ($headers["archived"] == "true" || $headers["archived"] == "false") { 
+            // Récupère la liste des objets (true = 1 ; false = 0)
+            $data = getAllObjects(($headers["archived"] == "true") ? 1 : 0);
+
+            http_response_code(HTTPCodeGet($data));
+        
+            header('Content-Type: application/json');
+            echo json_encode($data);
+            exit();
+        }
+    } 
+
+    http_response_code(400);
+    echo 'HTTP Header param "archived"';
     exit();
 });
 
@@ -148,11 +147,8 @@ route('get', $sub_dir . '/objects', function ($matches, $rxd) {
 route('get', $sub_dir . '/objects/archive', function ($matches, $rxd) {
     $data = getAllObjects(true);
 
-    if ($data == null) {
-        http_response_code(404);
-    } else {
-        http_response_code(200);
-    }
+    http_response_code(HTTPCodeGet($data));
+
     header('Content-Type: application/json');
     echo json_encode($data);
     exit();
@@ -168,19 +164,12 @@ route('post', $sub_dir . '/objects', function ($matches, $rxd) {
     // Takes raw data from the request
     $received_json = (file_get_contents('php://input'));
 
-    $data = json_decode($received_json, true);
-
     $affectedLines = insertFromJSON($received_json);
     
-    if ($affectedLines === -2) {
-        http_response_code(400);
-    } else {
-        http_response_code(200);
-    }
+    http_response_code(HTTPCodePost($affectedLines));
 
     header('Content-Type: application/json');
-    //echo $received_json;
-    echo $affectedLines;
+    echo $received_json;
     exit();
 });
 
@@ -237,11 +226,8 @@ route('put', $sub_dir . '/objects/archive', function ($matches, $rxd) {
 route('get', $sub_dir . '/removal-reason', function ($matches, $rxd) {
     $data = getRemovalReason();
 
-    if ($data == null) {
-        http_response_code(404);
-    } else {
-        http_response_code(200);
-    }
+    http_response_code(HTTPCodeGet($data));
+
     header('Content-Type: application/json');
     echo json_encode($data);
     exit();
@@ -250,7 +236,6 @@ route('get', $sub_dir . '/removal-reason', function ($matches, $rxd) {
 
 
 // si l'url ne correspond à aucune route
-$data = [];
 $data = [
    "error"     => "Route invalide"
 ];
