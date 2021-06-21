@@ -20,7 +20,7 @@ function startInventory (){
         setAllObjectsNotFound();
         return 1;
     } else { 
-        return -1;
+        return OBJECT_DOESNT_EXIST;
     }
 }
 
@@ -34,7 +34,7 @@ function objectScanned($aho_id) {
     if (checkObjectExist($aho_id)) 
         return setObjectFound($aho_id);    
     else 
-        return -1;    
+        return OBJECT_DOESNT_EXIST;    
 }
 
 
@@ -62,11 +62,36 @@ function generateInventoryPDF () {
 /* ******************************  GESTION JSON  ****************************** */
 
 function scanFromJSON($json) { 
+    $data = json_decode($json, true);
+
+    // Si l'objet n'existe pas, retourner -1
+    if (checkObjectExist($aho_id)) 
+        return setObjectFound($aho_id);    
+    else 
+        return OBJECT_DOESNT_EXIST;  
 
 
+    // Gestion de l'identifiant AHO
+    if (!empty($data['aho_id'])) {
+        $aho_id = $data['aho_id'];
+    } else {
+        echo "aho_id ";
+        $isValid = false;
+    }
+
+    // Vérifier si l'objet existe 
+    if (!checkObjectExist($aho_id)) {
+        echo "object_doesnt_exist ";
+        $isValid = false;
+    }
+
+    // Si tous les paramètres sont valides, effectuer l'archivage
+    if ($isValid)
+        return insertObject ($aho_id, $entryYear, $name, $price);
+    else 
+        return -2;
 
 }
-
 
 
 /**
@@ -115,12 +140,11 @@ function insertFromJSON ($json) {
         $isValid = false;
     }
 
-
     // Si tous les paramètres sont valides, effectuer l'archivage
     if ($isValid)
         return insertObject ($aho_id, $entryYear, $name, $price);
     else 
-        return -2;
+        return -2;        
 }
 
 
@@ -145,6 +169,12 @@ function updateFromJSON ($json) {
         $isValid = false;
     }
 
+    // Vérifier si l'objet existe 
+    if (!checkObjectExist($aho_id)) {
+        echo "object_doesnt_exist ";
+        return OBJECT_DOESNT_EXIST;
+    }
+
     // Gestion de l'année de sortie d'inventaire
     if (!empty($data['name'])) {
         $name = $data['name'];
@@ -162,10 +192,17 @@ function updateFromJSON ($json) {
     }
 
     // Si tous les paramètres sont valides, effectuer l'archivage
-    if ($isValid)
-        return updateObject ($aho_id, $name, $price);
-    else 
-        return INVALID_JSON;
+    if ($isValid) {
+        // Vérifier si l'objet existe 
+        if (!checkObjectExist($aho_id)) {
+            echo "object_doesnt_exist ";
+            return OBJECT_DOESNT_EXIST;
+        } else {
+            return updateObject ($aho_id, $name, $price);
+        }
+    } else {
+           return INVALID_JSON;
+    } 
 }
 
 
@@ -199,18 +236,29 @@ function archiveFromJSON ($json) {
     }
 
     // Gestion de la raison de sortie de l'inventaire 
-    if (!empty($data['removalReason']) && !checkRemovalReason($removalReason)) {
+    if (!empty($data['removalReason'])) {
         $removalReason = $data['removalReason'];
+        if (!checkRemovalReason($removalReason)) {
+            echo "removalReason_invalid ";
+            $isValid = false;
+        }
     } else {
         echo "removalReason ";
         $isValid = false;
     }
 
     // Si tous les paramètres sont valides, effectuer l'archivage
-    if ($isValid)
-        return archiveObject ($aho_id, $removalYear, $removalReason);
-    else 
+    if ($isValid) {
+     // Vérifier si l'objet existe 
+        if (!checkObjectExist($aho_id)) {
+            echo "object_doesnt_exist ";
+            return OBJECT_DOESNT_EXIST;
+        } else {
+            return archiveObject ($aho_id, $removalYear, $removalReason);
+        }
+    } else {
         return INVALID_JSON;
+    } 
 }
 
 
@@ -241,7 +289,10 @@ function checkObjectExist($aho_id) {
     return !empty(getObject($aho_id));
 }
 
-
+/**
+ * Vérifie si l'id passé en paramètre existe dans la table des raisons de sortie d'inventaire 
+ * @return boolean True si l'id passé en paramètre existe, false sinon 
+ */
 function checkRemovalReason($removalReasonToCheck) {
     $removalReasonsList = getRemovalReason();
 
@@ -259,19 +310,19 @@ function checkRemovalReason($removalReasonToCheck) {
 
 
 /**
- * Permet de retourner 
+ * Permet de retourner le code HTTP pour l'API suivant le code d'erreur passé en paramètre 
  */
 function getCodeHTTP($state) {
 
     $responseCode = 0;
 
-    switch ($affectedLines) { 
+    switch ($state) { 
         case INVALID_JSON: $responseCode = 400;
         break;
-        case -1: $responseCode = 404;
+        case OBJECT_DOESNT_EXIST: $responseCode = 404;
         break;
         case 0: 
-        case 1: $responseCode = 200;
+        case SUCCESS: $responseCode = 200;
         break;
     }
 

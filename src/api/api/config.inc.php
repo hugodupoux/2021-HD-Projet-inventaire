@@ -17,3 +17,4 @@ const IMG_DIR = HOME_DIR .'img/';
 
 const INVALID_JSON = -2;
 const OBJECT_DOESNT_EXIST = -1;
+const SUCCESS = 1;
