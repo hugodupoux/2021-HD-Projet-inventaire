@@ -3,7 +3,7 @@
  * @Author: Hugo Dupoux
  * @filename : api/index.php
  * @creation : 08/06/2021
- * @last_modification : 21/06/2021
+ * @last_modification : 22/06/2021
  */
 
 //chargement de la configuration
@@ -27,7 +27,7 @@ $sub_dir = dirname($_SERVER['PHP_SELF']);
  * Permet de démarrer un inventaire si tous les objets sont trouvés
  * Ne retourne rien 
  */
-route('post', $sub_dir . '/inventory', function ($matches, $rxd) {
+route('put', $sub_dir . '/inventory', function ($matches, $rxd) {
 
     $state = startInventory();
 
@@ -37,32 +37,6 @@ route('post', $sub_dir . '/inventory', function ($matches, $rxd) {
         $responseCode = 409;
 
     http_response_code($responseCode);
-    exit();
-});
-
-
-/************************** A SUPPRIEMR  */
-/**
- * Permet de paramétrer un objet comme trouvé
- * Retourne -2 si le json est invalide, -1 si l'objet est inexistant, 0 si l'objet est déjà trouvé, 1 si l'opération a réussie
- */
-route('post', $sub_dir . '/scan', function ($matches, $rxd) {
-
-    // Takes raw data from the request
-    $received_json = (file_get_contents('php://input'));
-
-    $data = json_decode($received_json, true);
-
-    $affectedLines = -2;
-
-    if (isset($data['aho_id'])) {
-        $affectedLines = objectScanned($data['aho_id']);
-    }
-
-    http_response_code(getCodeHTTP($affectedLines));
-
-    header('Content-Type: application/json');
-    echo $affectedLines;
     exit();
 });
 
@@ -142,20 +116,6 @@ route('get', $sub_dir . '/objects', function ($matches, $rxd) {
 
 
 /**
- * Retourne la liste de tous les objets archivés 
- */
-route('get', $sub_dir . '/objects/archive', function ($matches, $rxd) {
-    $data = getAllObjects(true);
-
-    http_response_code(HTTPCodeGet($data));
-
-    header('Content-Type: application/json');
-    echo json_encode($data);
-    exit();
-});
-
-
-/**
  * Permet d'insérer un objet
  * Retourne -1 si le json est invalide, nombre positif : nombre de lignes affectés (0 ou 1)
  */
@@ -165,17 +125,27 @@ route('post', $sub_dir . '/objects', function ($matches, $rxd) {
     $received_json = (file_get_contents('php://input'));
 
     $affectedLines = insertFromJSON($received_json);
-    
-    http_response_code(HTTPCodePost($affectedLines));
 
-    header('Content-Type: application/json');
-    echo $received_json;
+    $responseCode = 0;
+
+    switch ($affectedLines) { 
+        case INVALID_JSON: $responseCode = 400;
+        break;
+        case -1: $responseCode = 409;
+        break;
+        case SUCCESS: $responseCode = 201;
+        echo json_encode(getObject(json_decode($received_json, true)['aho_id']));
+        header('Content-Type: application/json');
+        break;
+    }
+    
+    http_response_code($responseCode);
     exit();
 });
 
 
 /**
- * Permet de modifier un objet
+ * Permet de modifier un objet : le paramétrer comme scanné, changer son nom & prix, l'archiver
  * Retourne -2 si le json est invalide, -1 si l'objet est inexistant, 0 si l'objet est déjà trouvé, 1 si l'opération a réussie
  */
 route('put', $sub_dir . '/objects', function ($matches, $rxd) {
@@ -183,36 +153,24 @@ route('put', $sub_dir . '/objects', function ($matches, $rxd) {
     // Takes raw data from the request
     $received_json = (file_get_contents('php://input'));
 
-    $data = json_decode($received_json, true);
-
     $affectedLines = updateFromJSON($received_json);
 
-    http_response_code(getCodeHTTP($affectedLines));
+    $responseCode = 0;
 
-    header('Content-Type: application/json');
-    //echo $received_json;
-    echo $affectedLines;
-    exit();
-});
+    switch ($affectedLines) { 
+        case INVALID_JSON: $responseCode = 400;
+        break;
+        case OBJECT_DOESNT_EXIST: $responseCode = 404;
+        break;
+        case 0: $responseCode = 204;
+        break;
+        case SUCCESS: $responseCode = 201;
+        header('Content-Type: application/json');
+        echo json_encode(getObject(json_decode($received_json, true)['aho_id']));
+        break;
+    }
 
-
-/**
- * Permet d'archiver un objet
- * Retourne -1 si le json est invalide, nombre positif : nombre de lignes affectés (0 ou 1)
- */
-route('put', $sub_dir . '/objects/archive', function ($matches, $rxd) {
-
-    // Takes raw data from the request
-    $received_json = (file_get_contents('php://input'));
-
-    $data = json_decode($received_json, true);
-
-    $affectedLines = archiveFromJSON($received_json);
-    
-    http_response_code(getCodeHTTP($affectedLines));
-
-    header('Content-Type: application/json');
-    echo $affectedLines;
+    http_response_code($responseCode);
     exit();
 });
 
@@ -232,7 +190,6 @@ route('get', $sub_dir . '/removal-reason', function ($matches, $rxd) {
     echo json_encode($data);
     exit();
 });
-
 
 
 // si l'url ne correspond à aucune route

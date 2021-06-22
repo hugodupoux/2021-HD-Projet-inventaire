@@ -4,7 +4,7 @@
  * @folder : IoT/Site
  * @filename : db.model.php
  * @creation : 09/06/2021
- * @last_modification : 21/06/2021
+ * @last_modification : 22/06/2021
  */
 
 
@@ -126,72 +126,75 @@ function insertObject ($aho_id, $entryYear, $name, $price) {
     }
 
     catch(PDOException $e){
-        echo $e->getMessage();
-        die();
+        // SI l'objet existe déjà, retourner -1 
+        return -1;
     }
 }
 
 
 /**
- * Insert un nouvel objet dans la base de données 
- * 
- * @return int Nombre de lignes affectés
+ * Modifie un objet dans la base de données 
+ * @param aho_id ID AHO de l'objet à modifier
+ * @param objectScanned True si l'objet est scanné, false sinon, null pour aucun changement
+ * @param name Nom de l'objet, null pour aucun changement 
+ * @param price Prix de l'objet, null pour aucun changement
+ * @param removalReason FK de raison de sortie d'inventaire, null pour aucun changement, si spécifié paramètre removalYear obligatoire
+ * @param removalYear Année de sortie d'inventaire, null pour aucun changement, si spécifié paramètre removalReason obligatoire
+ * @return int Nombre de lignes affectés, ou -1 si il n'y aucun paramètre 
  */
-function updateObject ($aho_id, $name, $price) { 
+function updateObject ($aho_id, $objectScanned, $name, $price, $removalReason, $removalYear) { 
     try{
         // Ouverture d'une connexion à la DB
         $dbh = conn_db(DB_NAME);
 
-        // Requête
-        $sql = "UPDATE tb_objet
-                SET obj_nom = :new_name, obj_prix = :new_price
-                WHERE obj_aho = :aho_id";
+        // Assigne les champs de la requête SQL si les paramètres ne sont pas nuls
+        $fieldObjectScanned = is_null($objectScanned) ? "" : "obj_scanne = :object_scanned";
+        $fieldName = empty($name) ? "" : "obj_nom = :new_name";
+        $fieldPrice = is_null($price) ? "" : "obj_prix = :new_price";
+        $fieldRemovalReason = is_null($removalReason) ? "" : "obj_fk_motif_suppression = :removal_reason";
+        $fieldRemovalYear = empty($removalYear) ? "" : "obj_annee_sortie = :removal_year";
+
+        // Création d'un tableau de tous les paramètres de la requête
+        $fields = array ($fieldObjectScanned, $fieldName, $fieldPrice, $fieldRemovalReason, $fieldRemovalYear);
+
+        $firstField = true;
+        $sqlParameter = "";
+
+        // Concaténer tous les paramètres de la requête SQL avec des virgules
+        foreach ($fields as &$field) { 
+            if (!empty($field)) { 
+                // Ajoute une virgule, sauf si c'est le premier champs 
+                if (!$firstField) {
+                    $sqlParameter = $sqlParameter . ", ";
+                }
+                $sqlParameter = $sqlParameter . $field;
+                $firstField = false;
+            }
+        }
+
+        // Si tous les paramètres sont à null, retourner -1
+        if (empty($sqlParameter)) { 
+            return -2;
+        }
+
+        // Concaténer la requête finale
+        $sql = "UPDATE tb_objet SET " . $sqlParameter . " WHERE obj_aho = :aho_id";
 
         // Préparation de la requête sur le serveur
         $stmt = $dbh->prepare($sql);
 
-        $stmt->bindParam(':new_name',$name,PDO::PARAM_STR);
-        $stmt->bindParam(':new_price',$price,PDO::PARAM_STR);
+        // Lier les paramètres si ils ne sont pas à null 
         $stmt->bindParam(':aho_id',$aho_id,PDO::PARAM_STR);
-
-        // Exécution de la requête
-        $stmt->setFetchMode(PDO::FETCH_ASSOC);
-        $stmt->execute();
-
-        // Retourne le nombre de lignes affectés 
-        return $stmt->rowCount();
-    }
-
-    catch(PDOException $e){
-        echo $e->getMessage();
-        die();
-    }
-}
-
-
-/**
- * Archive un objet, en lui donnant une année de sortie d'inventaire et une raison de sortie 
- * @param $aho_id string Identifiant AHO de l'objet à archiver
- * 
- * 
- * @return array|null Tableau contenant les informations de l'objet ou null si l'objet n'existe pas
- */
-function archiveObject ($aho_id, $removalYear, $removalReason) { 
-    try{
-        // Ouverture d'une connexion à la DB
-        $dbh = conn_db(DB_NAME);
-
-        // Requête
-        $sql = 'UPDATE tb_objet
-                SET obj_annee_sortie = :removal_year, obj_fk_motif_suppression = :removal_reason
-                WHERE obj_aho = :aho_id;';
-
-        // Préparation de la requête sur le serveur
-        $stmt = $dbh->prepare($sql);
-
-        $stmt->bindParam(':aho_id',$aho_id,PDO::PARAM_STR);
-        $stmt->bindParam(':removal_year',$removalYear,PDO::PARAM_STR);
-        $stmt->bindParam(':removal_reason',$removalReason,PDO::PARAM_STR);
+        if (!is_null($objectScanned))
+            $stmt->bindParam(':object_scanned',$objectScanned,PDO::PARAM_STR);
+        if (!empty($name))    
+            $stmt->bindParam(':new_name',$name,PDO::PARAM_STR);
+        if (!is_null($price))    
+            $stmt->bindParam(':new_price',$price,PDO::PARAM_STR);
+        if (!is_null($removalReason))    
+            $stmt->bindParam(':removal_reason',$removalReason,PDO::PARAM_STR);
+        if (!empty($removalYear))    
+            $stmt->bindParam(':removal_year',$removalYear,PDO::PARAM_STR);
 
         // Exécution de la requête
         $stmt->setFetchMode(PDO::FETCH_ASSOC);
@@ -338,35 +341,3 @@ function setAllObjectsNotFound() {
     }
 }
 
-
-/**
- * Parametre un objet comme trouvé avec l'identifiant AHO passé en paramètre 
- */
-function setObjectFound($aho_id) { 
-    try{
-        // Ouverture d'une connexion à la DB
-        $dbh = conn_db(DB_NAME);
-
-        // Requête
-        $sql = "UPDATE tb_objet
-                SET obj_scanne = TRUE
-                WHERE obj_aho = :aho_id;";
-
-        // Préparation de la requête sur le serveur
-        $stmt = $dbh->prepare($sql);
-
-        $stmt->bindParam(':aho_id',$aho_id,PDO::PARAM_STR);
-
-        // Exécution de la requête
-        $stmt->setFetchMode(PDO::FETCH_ASSOC);
-        $stmt->execute();
-
-        // Retourne le nombre de lignes affectés 
-        return $stmt->rowCount();
-    }
-
-    catch(PDOException $e){
-        echo $e->getMessage();
-        die();
-    }
-}
